@@ -1,0 +1,40 @@
+{
+  "summary": "Full backend + frontend E2E for WATTLY. 21/21 backend pytest tests pass after fixing an ObjectId-mutation bug in 4 POST endpoints (purchase, link utility, credit events, payouts). Frontend pages (Landing/Marketplace/Bill/Dashboard/MyShares/Credits) all render and integrate correctly with the API. Cookie-based auth verified end-to-end.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All pages", "issues": ["HTML <title> is still the default 'Emergent | Fullstack App' instead of 'WATTLY' - update /app/frontend/public/index.html title tag"]},
+      {"screen": "Navbar (authenticated)", "issues": ["User avatar image src appears to default to placeholder; profile photo positions correctly but the test user has a placeholder URL - acceptable for test"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wattly_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Cosmetic) Update <title> in /app/frontend/public/index.html from 'Emergent | Fullstack App' to 'WATTLY'.",
+    "Confirm the ObjectId-mutation fix (4 insert_one calls now wrapped in dict(...)) is acceptable - alternative is to pop('_id', None) after insert."
+  ],
+  "critical_code_review_comments": [
+    "FIXED IN-PLACE: motor's insert_one mutates the source dict by adding an ObjectId _id. server.py was returning these mutated dicts in 4 endpoints (POST /shares/purchase, internal credit_event insert, POST /utility/link, POST /payout/request), causing FastAPI jsonable_encoder to raise 500. Wrapped each insert_one argument with dict(...) to insert a copy and keep the original doc clean.",
+    "Datetime fields are stored as ISO strings but the Pydantic models declare datetime — works due to ConfigDict(extra='ignore') and Pydantic auto-coercion, but consistency is fragile. Consider standardizing on either bson Date or ISO strings everywhere.",
+    "seed() guard only checks farms collection emptiness — fine but won't repair partially-seeded telemetry if a previous run aborted mid-seed.",
+    "CORS allow_origins falls back to '*' when CORS_ORIGINS env missing, while allow_credentials=True — strictly speaking browsers reject this combo. In production set CORS_ORIGINS explicitly."
+  ],
+  "updated_files": [
+    "/app/backend/server.py",
+    "/app/backend/tests/test_wattly_backend.py"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "100% (7/7 flows)"},
+  "test_credentials": "Test session created via mongosh per /app/auth_testing.md. Token used: test_session_1780495450952 (user: test-user-1780495450952). Cookie name: session_token (HttpOnly, Secure, SameSite=None).",
+  "seed_data_creation": "Used mongosh to insert one test user + session into users / user_sessions collections. Pytest fixture also creates+tears down a per-session test user (test-user-pytest-<ts>). 8 farms seeded by backend startup hook (idempotent).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend ObjectId bug already patched - if you see 500s on POST /shares/purchase, /utility/link, or /payout/request again, re-check that the insert_one calls still wrap their argument in dict(). To test auth-gated endpoints, follow /app/auth_testing.md: create user+session via mongosh, then either send Authorization: Bearer <token> for curl OR set session_token cookie for browser. The pytest file at /app/backend/tests/test_wattly_backend.py is the canonical regression suite (run: pytest backend/tests/test_wattly_backend.py -v).",
+  "rca of the issue": "ROOT CAUSE (500 on insert+return endpoints): Motor's AsyncIOMotorCollection.insert_one mutates the input dict in-place to add the generated _id (bson.ObjectId). The original code (e.g., link_utility) returned that same dict, so FastAPI's jsonable_encoder hit an ObjectId and raised TypeError('ObjectId is not iterable'), surfacing as HTTP 500. REPRODUCTION: POST /api/utility/link or /api/shares/purchase with a valid session_token cookie -> 500. MITIGATION APPLIED: Wrap each insert_one() argument with dict(...) so motor mutates a throwaway copy and the original (clean) dict is returned to the client. Verified by re-running the pytest suite — all 21 tests pass; manually re-checked /api/shares/purchase + /api/utility/link return 200 with clean JSON (no _id field)."
+}
