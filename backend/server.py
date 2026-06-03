@@ -31,10 +31,12 @@ api = APIRouter(prefix="/api")
 
 EMERGENT_OAUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
-# Yield + tariff constants — realistic Indian generation numbers, with a +1% bump.
-SOLAR_YIELD_KWH_PER_KW_PER_DAY = 5.33   # ~1,945 kWh/kW/yr (was 5.28 baseline + 1%)
-WIND_YIELD_KWH_PER_KW_PER_DAY = 6.79    # ~2,478 kWh/kW/yr (was 6.72 baseline + 1%)
-CREDIT_RATE_INR_PER_KWH = 6.57          # ₹6.5/kWh baseline + 1%
+# Yield + tariff constants — realistic Indian generation, with platform-O&M-adjusted yield.
+SOLAR_YIELD_KWH_PER_KW_PER_DAY = 5.33   # real generation, ~1,945 kWh/kW/yr
+WIND_YIELD_KWH_PER_KW_PER_DAY = 6.79    # real generation, ~2,478 kWh/kW/yr
+# Effective distributed yield rate to the fractional owner AFTER platform O&M / amortization.
+# Targets ~₹37.50/day average on a 5 kW solar share → ~22% annual yield, ~4.5 yr payback.
+CREDIT_RATE_INR_PER_KWH = 1.41
 
 def yield_per_kw_day(farm_type: str) -> float:
     return SOLAR_YIELD_KWH_PER_KW_PER_DAY if farm_type == "solar" else WIND_YIELD_KWH_PER_KW_PER_DAY
@@ -381,6 +383,36 @@ async def credit_ledger(user: User = Depends(get_current_user), status: Optional
             "balance_kwh": round(balance, 2),
             "balance_inr": round(inr_balance, 2),
         },
+    }
+
+
+@api.get("/credits/earnings")
+async def credit_earnings(user: User = Depends(get_current_user), days: int = 30):
+    """Daily INR + kWh earnings buckets for the user, used by the Dashboard chart."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days - 1)).date().isoformat()
+    events = await db.credit_events.find(
+        {"user_id": user.user_id, "event_type": "earned", "date_key": {"$gte": cutoff}},
+        {"_id": 0},
+    ).to_list(3000)
+    by_date: dict[str, dict] = {}
+    for e in events:
+        d = e.get("date_key") or e["timestamp"][:10]
+        bucket = by_date.setdefault(d, {"date": d, "kwh": 0.0, "inr": 0.0})
+        bucket["kwh"] += e["units_kwh"]
+        bucket["inr"] += e["inr_value"]
+    series = [
+        {"date": k, "kwh": round(v["kwh"], 2), "inr": round(v["inr"], 2)}
+        for k, v in sorted(by_date.items())
+    ]
+    total_inr = round(sum(s["inr"] for s in series), 2)
+    total_kwh = round(sum(s["kwh"] for s in series), 2)
+    avg_daily_inr = round(total_inr / max(len(series), 1), 2)
+    return {
+        "series": series,
+        "total_inr": total_inr,
+        "total_kwh": total_kwh,
+        "avg_daily_inr": avg_daily_inr,
+        "days": len(series),
     }
 
 

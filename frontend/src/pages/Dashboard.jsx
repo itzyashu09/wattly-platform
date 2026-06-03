@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
 import AnimatedNumber from "@/components/wattly/AnimatedNumber";
+import EarningsChart from "@/components/wattly/EarningsChart";
 import { Button } from "@/components/ui/button";
 import { Leaf, TreePine, Wallet, Activity, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -11,7 +12,7 @@ export default function Dashboard() {
   const [tele, setTele] = useState({ series: [], total_kwh: 0, co2_saved_kg: 0, trees_equivalent: 0, inr_value: 0 });
   const [ledger, setLedger] = useState({ events: [], summary: { balance_kwh: 0, balance_inr: 0, total_earned_kwh: 0, total_applied_kwh: 0, total_donated_kwh: 0 } });
   const [shares, setShares] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+  const [, setLoaded] = useState(false);
   const [accruing, setAccruing] = useState(false);
 
   const loadAll = async () => {
@@ -51,8 +52,6 @@ export default function Dashboard() {
       setAccruing(false);
     }
   };
-
-  const chart = useMemo(() => buildSparkline(tele.series), [tele.series]);
 
   const cards = [
     { id: "balance-inr", label: "Credit value", value: ledger.summary.balance_inr ?? 0, prefix: "₹", icon: Wallet },
@@ -111,21 +110,9 @@ export default function Dashboard() {
       </section>
 
       <section className="grid lg:grid-cols-3 gap-5">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="lg:col-span-2 rounded-2xl border border-[#E7E2D6] bg-white p-6"
-          data-testid="dashboard-chart"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[#6B7B70]">Generation</p>
-              <h2 className="font-serif-display text-3xl text-[#183021]">30-day kWh stream</h2>
-            </div>
-            <div className="font-mono-num text-sm text-[#6B7B70]">{tele.series.length} days</div>
-          </div>
-          <Sparkline data={chart} loaded={loaded} />
-        </motion.div>
+        <div className="lg:col-span-2">
+          <EarningsChart />
+        </div>
 
         <div className="rounded-2xl border border-[#E7E2D6] bg-white p-6 space-y-4" data-testid="dashboard-shares">
           <div className="flex items-center justify-between">
@@ -150,55 +137,5 @@ export default function Dashboard() {
         </div>
       </section>
     </div>
-  );
-}
-
-function buildSparkline(series) {
-  if (!series?.length) return { points: "", area: "", min: 0, max: 0, w: 600, h: 180, labels: [] };
-  const w = 600;
-  const h = 180;
-  const pad = 10;
-  const xs = series.map((_, i) => pad + (i * (w - pad * 2)) / Math.max(series.length - 1, 1));
-  const ys = series.map((s) => s.kwh);
-  const min = Math.min(...ys);
-  const max = Math.max(...ys);
-  const range = Math.max(max - min, 1);
-  const points = ys.map((y, i) => {
-    const yy = h - pad - ((y - min) / range) * (h - pad * 2);
-    return `${xs[i]},${yy}`;
-  });
-  const linePath = "M" + points.join(" L");
-  const areaPath = `${linePath} L${xs[xs.length - 1]},${h - pad} L${xs[0]},${h - pad} Z`;
-  return { line: linePath, area: areaPath, min, max, w, h, count: series.length };
-}
-
-function Sparkline({ data, loaded }) {
-  if (!loaded) return <div className="h-40 animate-pulse rounded-xl bg-[#F5F3ED]" />;
-  if (!data.line) {
-    return (
-      <div className="h-40 flex items-center justify-center text-sm text-[#6B7B70]" data-testid="dashboard-chart-empty">
-        Buy a share to see your live generation curve.
-      </div>
-    );
-  }
-  return (
-    <svg viewBox={`0 0 ${data.w} ${data.h}`} className="w-full h-44" data-testid="dashboard-svg-chart">
-      <defs>
-        <linearGradient id="grad" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#C25942" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#C25942" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={data.area} fill="url(#grad)" />
-      <motion.path
-        d={data.line}
-        stroke="#183021"
-        strokeWidth={1.6}
-        fill="none"
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ duration: 1.2, ease: "easeOut" }}
-      />
-    </svg>
   );
 }

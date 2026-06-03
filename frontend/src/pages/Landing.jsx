@@ -14,7 +14,7 @@ function googleLogin() {
 
 const STATS = [
   { label: "Indian assets", value: "8", suffix: "" },
-  { label: "Avg yield", value: "11.3", suffix: "%" },
+  { label: "Avg yield", value: "22", suffix: "%" },
   { label: "Min lot", value: "1", suffix: " kW" },
 ];
 
@@ -47,9 +47,10 @@ export default function Landing() {
 
   const estimate = useMemo(() => {
     const pricePerKw = type === "solar" ? 12500 : 14200;
-    const dailyKwhPerKw = type === "solar" ? 5.33 : 6.79; // realistic Indian yield + 1%
+    const dailyKwhPerKw = type === "solar" ? 5.33 : 6.79; // realistic Indian yield
+    const distributedRate = 1.41; // ₹/kWh distributed to owner (post-platform O&M)
     const annualKwh = kw * dailyKwhPerKw * 365;
-    const annualSavings = annualKwh * 6.57; // ₹6.5/kWh + 1%
+    const annualSavings = annualKwh * distributedRate;
     const co2 = annualKwh * 0.82;
     const trees = co2 / 21;
     const investment = kw * pricePerKw;
