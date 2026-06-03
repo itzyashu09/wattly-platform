@@ -1,6 +1,12 @@
 {
   "name": "frontend",
   "version": "0.1.0",
+  "resolutions": {
+  "ajv": "^8.0.0"
+},
+"overrides": {
+  "ajv": "^8.0.0"
+}
   "private": true,
   "dependencies": {
     "@hookform/resolvers": "5.0.1",
