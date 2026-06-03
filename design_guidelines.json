@@ -1,0 +1,98 @@
+{
+  "theme_archetype": "Organic & Earthy",
+  "mode": "light",
+  "typography": {
+    "fonts": {
+      "heading": "Cormorant Garamond, serif",
+      "body": "Outfit, sans-serif"
+    },
+    "scale_rules": {
+      "h1": "text-5xl sm:text-6xl tracking-tight leading-none font-medium",
+      "h2": "text-3xl sm:text-4xl tracking-tight font-medium",
+      "h3": "text-xl sm:text-2xl font-medium",
+      "numbers_display": "text-4xl sm:text-6xl font-serif tracking-tight text-[#183021]",
+      "body": "text-base leading-relaxed text-slate-600",
+      "labels": "text-xs tracking-[0.1em] uppercase text-slate-500 font-medium"
+    }
+  },
+  "colors": {
+    "background": {
+      "primary": "#FCFAF8",
+      "secondary": "#F5F3ED",
+      "card": "#FFFFFF"
+    },
+    "text": {
+      "primary": "#183021",
+      "secondary": "#4A5568",
+      "muted": "#A0AEC0"
+    },
+    "accent": {
+      "pine": "#183021",
+      "moss": "#2C4A3B",
+      "terracotta": "#C25942",
+      "sky": "#B3C5D1",
+      "sage": "#D1DCD3"
+    },
+    "states": {
+      "success": "#38A169",
+      "warning": "#DD6B20",
+      "error": "#E53E3E"
+    }
+  },
+  "layout": {
+    "spacing": "Generous spacing. Use p-6, p-8, p-12 for containers to simulate architectural white-space.",
+    "border_radius": "rounded-xl for cards, rounded-full for pills/buttons.",
+    "borders": "1px solid #E2E8F0 or #D1DCD3 for architectural cardless look.",
+    "shadows": {
+      "ambient": "shadow-[0_8px_30px_rgb(0,0,0,0.04)]",
+      "hover": "shadow-[0_20px_40px_rgb(0,0,0,0.08)]"
+    }
+  },
+  "components": {
+    "navigation": "Locked top nav bar. Glassmorphism backdrop-blur-md bg-white/80. High contrast links.",
+    "buttons": "Primary CTA: bg-[#183021] text-white hover:bg-[#2C4A3B] transition-colors. Secondary: bg-[#F5F3ED] text-[#183021] hover:bg-[#D1DCD3].",
+    "cards": "White background, subtle 1px border. No heavy drop shadows by default. Use geometric layout.",
+    "tabs": "Sliding pill highlight using Framer Motion layoutId.",
+    "data_tables": "Geometric sans-serif (Outfit). Left aligned. Generous row padding. Muted text for secondary data."
+  },
+  "animation": {
+    "library": "framer-motion",
+    "rules": {
+      "hover_lift": "y: -4px, transition: { duration: 0.2, ease: 'easeOut' }",
+      "counters": "Use AnimatePresence and layout animations for ROI and credit balances.",
+      "page_transition": "opacity: 0 to 1, y: 10 to 0 on entry."
+    }
+  },
+  "assets": {
+    "icons": "lucide-react",
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1698752822107-69f8973936e4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODB8MHwxfHNlYXJjaHw0fHxzb2xhciUyMGZhcm0lMjBzdW5zZXR8ZW58MHx8fHwxNzgwNDk0ODQ0fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Large array of solar panels in a desert. Use for Pavagada/Bhadla farm hero or marketplace cards.",
+        "category": "marketplace_solar"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1562519990-50eb51e282b2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwxfHx3aW5kJTIwdHVyYmluZXMlMjBsYW5kc2NhcGV8ZW58MHx8fHwxNzgwNDk0ODQ0fDA&ixlib=rb-4.1.0&q=85",
+        "description": "White windmills during daytime. Use for Muppandal/Jaisalmer farm marketplace cards.",
+        "category": "marketplace_wind"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1533219480925-55054b668f15?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwxfHxncmVlbiUyMGZvcmVzdCUyMHRyZWVzJTIwc3VucmlzZXxlbnwwfHx8fDE3ODA0OTQ4NDR8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Aerial view of a green forest. Use for CO2 saved / Trees equivalent dashboard impact card.",
+        "category": "dashboard_impact"
+      }
+    ]
+  },
+  "testing": {
+    "attributes": "All interactive and key informational elements MUST include data-testid attribute (e.g., data-testid='buy-shares-button', data-testid='roi-slider')."
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the Premium Light Theme (Organic & Earthy). Do NOT use dark or navy backgrounds anywhere.",
+    "Implement Framer Motion for value counters in the ROI calculator and balances, and sliding pill tabs.",
+    "Use Cormorant Garamond for main numbers and headings, and Outfit for tabular data, forms, and secondary text.",
+    "Use pure CSS/Tailwind for structural layout and Shadcn components only where logical (e.g., Dropdowns, Modals). Customize Shadcn to remove generic styling.",
+    "Ensure the SVG generation chart on the dashboard is crisp, utilizing the accent colors (Pine or Terracotta).",
+    "Install Google Fonts for 'Cormorant Garamond' and 'Outfit' in index.css.",
+    "All files should use .js extension (not .tsx)."
+  ]
+}
