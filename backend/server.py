@@ -31,11 +31,10 @@ api = APIRouter(prefix="/api")
 
 EMERGENT_OAUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
-# Yield + tariff constants tuned to attractive-but-plausible Indian numbers.
-# These translate roughly to a ~60% gross annual yield vs investment.
-SOLAR_YIELD_KWH_PER_KW_PER_DAY = 6.5   # ~2,372 kWh/kW/yr (high-irradiance Indian sites)
-WIND_YIELD_KWH_PER_KW_PER_DAY = 8.0    # ~2,920 kWh/kW/yr (Jaisalmer-grade sites)
-CREDIT_RATE_INR_PER_KWH = 8.5          # BESCOM top tariff slab
+# Yield + tariff constants — realistic Indian generation numbers, with a +1% bump.
+SOLAR_YIELD_KWH_PER_KW_PER_DAY = 5.33   # ~1,945 kWh/kW/yr (was 5.28 baseline + 1%)
+WIND_YIELD_KWH_PER_KW_PER_DAY = 6.79    # ~2,478 kWh/kW/yr (was 6.72 baseline + 1%)
+CREDIT_RATE_INR_PER_KWH = 6.57          # ₹6.5/kWh baseline + 1%
 
 def yield_per_kw_day(farm_type: str) -> float:
     return SOLAR_YIELD_KWH_PER_KW_PER_DAY if farm_type == "solar" else WIND_YIELD_KWH_PER_KW_PER_DAY
