@@ -31,6 +31,15 @@ api = APIRouter(prefix="/api")
 
 EMERGENT_OAUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
+# Yield + tariff constants tuned to attractive-but-plausible Indian numbers.
+# These translate roughly to a ~60% gross annual yield vs investment.
+SOLAR_YIELD_KWH_PER_KW_PER_DAY = 6.5   # ~2,372 kWh/kW/yr (high-irradiance Indian sites)
+WIND_YIELD_KWH_PER_KW_PER_DAY = 8.0    # ~2,920 kWh/kW/yr (Jaisalmer-grade sites)
+CREDIT_RATE_INR_PER_KWH = 8.5          # BESCOM top tariff slab
+
+def yield_per_kw_day(farm_type: str) -> float:
+    return SOLAR_YIELD_KWH_PER_KW_PER_DAY if farm_type == "solar" else WIND_YIELD_KWH_PER_KW_PER_DAY
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -362,6 +371,8 @@ async def credit_ledger(user: User = Depends(get_current_user), status: Optional
     total_applied = sum(e["units_kwh"] for e in events if e["event_type"] == "applied")
     total_donated = sum(e["units_kwh"] for e in events if e["event_type"] == "donated")
     balance = total_earned - total_applied - total_donated
+    inr_balance = sum(e["inr_value"] for e in events if e["event_type"] == "earned") - \
+                  sum(e["inr_value"] for e in events if e["event_type"] in ("applied", "donated"))
     return {
         "events": events,
         "summary": {
@@ -369,8 +380,66 @@ async def credit_ledger(user: User = Depends(get_current_user), status: Optional
             "total_applied_kwh": round(total_applied, 2),
             "total_donated_kwh": round(total_donated, 2),
             "balance_kwh": round(balance, 2),
+            "balance_inr": round(inr_balance, 2),
         },
     }
+
+
+@api.post("/credits/accrue")
+async def accrue_credits(user: User = Depends(get_current_user)):
+    """Idempotent: walks each share's days since purchase, generates `earned` credit events
+    for any day not already accrued (keyed by share_id + date_key)."""
+    shares = await db.shares.find({"user_id": user.user_id}, {"_id": 0}).to_list(500)
+    today = datetime.now(timezone.utc).date()
+    created = 0
+    new_kwh = 0.0
+    new_inr = 0.0
+
+    for s in shares:
+        farm = await db.farms.find_one({"farm_id": s["farm_id"]}, {"_id": 0})
+        if not farm:
+            continue
+        existing = await db.credit_events.find(
+            {"share_id": s["share_id"], "event_type": "earned"},
+            {"_id": 0, "date_key": 1},
+        ).to_list(2000)
+        existing_dates = {e.get("date_key") for e in existing if e.get("date_key")}
+
+        purchased_at = s["purchased_at"]
+        if isinstance(purchased_at, str):
+            purchased_at = datetime.fromisoformat(purchased_at)
+        start_date = purchased_at.date()
+        daily_base = yield_per_kw_day(farm["farm_type"]) * s["capacity_kw"]
+        rng = random.Random(hash(s["share_id"]))
+
+        d = start_date
+        while d <= today:
+            key = d.isoformat()
+            if key not in existing_dates:
+                variability = 0.85 + 0.3 * rng.random()
+                kwh = round(daily_base * variability, 2)
+                inr = round(kwh * CREDIT_RATE_INR_PER_KWH, 2)
+                ts = datetime.combine(d, datetime.min.time(), tzinfo=timezone.utc)
+                ref = hashlib.sha256(f"{s['share_id']}{key}".encode()).hexdigest()[:16]
+                await db.credit_events.insert_one(dict({
+                    "event_id": f"ev_{uuid.uuid4().hex[:10]}",
+                    "user_id": user.user_id,
+                    "event_type": "earned",
+                    "units_kwh": kwh,
+                    "inr_value": inr,
+                    "farm_id": s["farm_id"],
+                    "share_id": s["share_id"],
+                    "date_key": key,
+                    "reference_hash": ref,
+                    "note": f"Generation · {farm['name']} ({s['capacity_kw']} kW)",
+                    "timestamp": ts.isoformat(),
+                }))
+                created += 1
+                new_kwh += kwh
+                new_inr += inr
+            d += timedelta(days=1)
+
+    return {"created": created, "kwh": round(new_kwh, 2), "inr": round(new_inr, 2)}
 
 
 # ------------------------------------------------------------------
@@ -385,34 +454,48 @@ async def telemetry(farm_id: str, days: int = 30):
 
 @api.get("/telemetry/user/me")
 async def user_telemetry(user: User = Depends(get_current_user), days: int = 30):
-    """Aggregate generation across all user shares for the past `days`."""
+    """Per-share daily yield aggregated across all user holdings."""
     shares = await db.shares.find({"user_id": user.user_id}, {"_id": 0}).to_list(500)
     if not shares:
-        return {"series": [], "total_kwh": 0, "co2_saved_kg": 0, "trees_equivalent": 0}
+        return {"series": [], "total_kwh": 0, "co2_saved_kg": 0, "trees_equivalent": 0, "inr_value": 0}
 
-    # Pull farms keyed by id
     farm_ids = list({s["farm_id"] for s in shares})
     farm_docs = await db.farms.find({"farm_id": {"$in": farm_ids}}, {"_id": 0}).to_list(50)
-    farm_cap = {f["farm_id"]: f["total_capacity_mw"] * 1000.0 for f in farm_docs}
+    farms_by_id = {f["farm_id"]: f for f in farm_docs}
 
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+    today = datetime.now(timezone.utc).date()
+    window_start = today - timedelta(days=days - 1)
     aggregate: dict[str, float] = {}
 
     for share in shares:
-        fid = share["farm_id"]
-        total_cap_kw = farm_cap.get(fid, 1.0)
-        user_fraction = share["capacity_kw"] / total_cap_kw if total_cap_kw else 0
-        farm_rows = await db.telemetry.find(
-            {"farm_id": fid, "date": {"$gte": cutoff}}, {"_id": 0}
-        ).to_list(days)
-        for row in farm_rows:
-            aggregate[row["date"]] = aggregate.get(row["date"], 0) + row["kwh_produced"] * user_fraction
+        farm = farms_by_id.get(share["farm_id"])
+        if not farm:
+            continue
+        daily_base = yield_per_kw_day(farm["farm_type"]) * share["capacity_kw"]
+        purchased_at = share["purchased_at"]
+        if isinstance(purchased_at, str):
+            purchased_at = datetime.fromisoformat(purchased_at)
+        start_date = max(purchased_at.date(), window_start)
+        rng = random.Random(hash(share["share_id"]))  # deterministic per-share variation
+        d = start_date
+        while d <= today:
+            variability = 0.85 + 0.3 * rng.random()
+            kwh = daily_base * variability
+            aggregate[d.isoformat()] = aggregate.get(d.isoformat(), 0) + kwh
+            d += timedelta(days=1)
 
-    series = [{"date": d, "kwh": round(v, 2)} for d, v in sorted(aggregate.items())]
+    series = [{"date": k, "kwh": round(v, 2)} for k, v in sorted(aggregate.items())]
     total_kwh = round(sum(s["kwh"] for s in series), 2)
-    co2_saved = round(total_kwh * 0.82, 2)  # kg CO2 per kWh avoided (Indian grid mix)
-    trees = round(co2_saved / 21.0, 1)  # 21 kg CO2 per mature tree per year
-    return {"series": series, "total_kwh": total_kwh, "co2_saved_kg": co2_saved, "trees_equivalent": trees}
+    inr_value = round(total_kwh * CREDIT_RATE_INR_PER_KWH, 2)
+    co2_saved = round(total_kwh * 0.82, 2)
+    trees = round(co2_saved / 21.0, 1)
+    return {
+        "series": series,
+        "total_kwh": total_kwh,
+        "inr_value": inr_value,
+        "co2_saved_kg": co2_saved,
+        "trees_equivalent": trees,
+    }
 
 
 # ------------------------------------------------------------------

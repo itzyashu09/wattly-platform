@@ -11,7 +11,7 @@ const FILTERS = [
 ];
 
 export default function Credits() {
-  const [data, setData] = useState({ events: [], summary: { balance_kwh: 0, total_earned_kwh: 0, total_applied_kwh: 0, total_donated_kwh: 0 } });
+  const [data, setData] = useState({ events: [], summary: { balance_kwh: 0, balance_inr: 0, total_earned_kwh: 0, total_applied_kwh: 0, total_donated_kwh: 0 } });
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState({ key: "timestamp", dir: "desc" });
 
@@ -43,16 +43,16 @@ export default function Credits() {
 
       <section className="grid md:grid-cols-4 gap-5">
         {[
-          { id: "balance", label: "Balance", value: data.summary.balance_kwh },
-          { id: "earned", label: "Earned", value: data.summary.total_earned_kwh },
-          { id: "applied", label: "Applied", value: data.summary.total_applied_kwh },
-          { id: "donated", label: "Donated", value: data.summary.total_donated_kwh },
+          { id: "balance-inr", label: "Balance (INR)", value: data.summary.balance_inr ?? 0, prefix: "₹", suffix: "" },
+          { id: "balance", label: "Balance (kWh)", value: data.summary.balance_kwh, suffix: " kWh" },
+          { id: "earned", label: "Earned", value: data.summary.total_earned_kwh, suffix: " kWh" },
+          { id: "applied", label: "Applied", value: data.summary.total_applied_kwh, suffix: " kWh" },
         ].map((s) => (
           <motion.div key={s.id} whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}
             className="rounded-2xl border border-[#E7E2D6] bg-white p-6" data-testid={`credits-summary-${s.id}`}>
             <div className="text-xs uppercase tracking-[0.18em] text-[#6B7B70]">{s.label}</div>
             <div className="font-serif-display text-4xl text-[#183021] mt-2">
-              <AnimatedNumber value={s.value} suffix=" kWh" decimals={1} />
+              <AnimatedNumber value={s.value} prefix={s.prefix ?? ""} suffix={s.suffix} decimals={s.prefix ? 0 : 1} />
             </div>
           </motion.div>
         ))}

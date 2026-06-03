@@ -2,37 +2,61 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
 import AnimatedNumber from "@/components/wattly/AnimatedNumber";
-import { Leaf, TreePine, Wallet, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Leaf, TreePine, Wallet, Activity, RefreshCcw } from "lucide-react";
+import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
 export default function Dashboard() {
-  const [tele, setTele] = useState({ series: [], total_kwh: 0, co2_saved_kg: 0, trees_equivalent: 0 });
-  const [ledger, setLedger] = useState({ events: [], summary: { balance_kwh: 0, total_earned_kwh: 0, total_applied_kwh: 0, total_donated_kwh: 0 } });
+  const [tele, setTele] = useState({ series: [], total_kwh: 0, co2_saved_kg: 0, trees_equivalent: 0, inr_value: 0 });
+  const [ledger, setLedger] = useState({ events: [], summary: { balance_kwh: 0, balance_inr: 0, total_earned_kwh: 0, total_applied_kwh: 0, total_donated_kwh: 0 } });
   const [shares, setShares] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [accruing, setAccruing] = useState(false);
+
+  const loadAll = async () => {
+    const [t, l, s] = await Promise.all([
+      api.get("/telemetry/user/me"),
+      api.get("/credits/ledger"),
+      api.get("/shares/mine"),
+    ]);
+    setTele(t.data);
+    setLedger(l.data);
+    setShares(s.data);
+  };
 
   useEffect(() => {
     (async () => {
       try {
-        const [t, l, s] = await Promise.all([
-          api.get("/telemetry/user/me"),
-          api.get("/credits/ledger"),
-          api.get("/shares/mine"),
-        ]);
-        setTele(t.data);
-        setLedger(l.data);
-        setShares(s.data);
+        // Auto-accrue credits on dashboard load (idempotent per share+date)
+        await api.post("/credits/accrue").catch(() => {});
+        await loadAll();
       } finally {
         setLoaded(true);
       }
     })();
   }, []);
 
+  const accrueNow = async () => {
+    setAccruing(true);
+    try {
+      const r = await api.post("/credits/accrue");
+      await loadAll();
+      if (r.data.created > 0) {
+        toast.success(`+${r.data.kwh.toLocaleString("en-IN")} kWh credited (₹${r.data.inr.toLocaleString("en-IN")})`);
+      } else {
+        toast.info("Ledger already up to date");
+      }
+    } finally {
+      setAccruing(false);
+    }
+  };
+
   const chart = useMemo(() => buildSparkline(tele.series), [tele.series]);
 
   const cards = [
-    { id: "balance", label: "Credit balance", value: ledger.summary.balance_kwh, suffix: " kWh", icon: Wallet },
-    { id: "generation", label: "30-day generation", value: tele.total_kwh, suffix: " kWh", icon: Activity },
+    { id: "balance-inr", label: "Credit value", value: ledger.summary.balance_inr ?? 0, prefix: "₹", icon: Wallet },
+    { id: "balance", label: "Credit balance", value: ledger.summary.balance_kwh, suffix: " kWh", icon: Activity },
     { id: "co2", label: "CO₂ avoided (30d)", value: tele.co2_saved_kg, suffix: " kg", icon: Leaf },
     { id: "trees", label: "Trees equivalent", value: tele.trees_equivalent, suffix: "", icon: TreePine, decimals: 1 },
   ];
@@ -44,13 +68,26 @@ export default function Dashboard() {
           <p className="text-xs uppercase tracking-[0.2em] text-[#6B7B70]">Command center</p>
           <h1 className="font-serif-display text-5xl text-[#183021] tracking-tight">Your green grid</h1>
         </div>
-        <Link
-          to="/marketplace"
-          data-testid="dashboard-cta-marketplace"
-          className="text-sm font-medium text-[#183021] underline-offset-4 hover:underline"
-        >
-          Buy more capacity →
-        </Link>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={accrueNow}
+            disabled={accruing}
+            data-testid="accrue-credits-btn"
+            className="text-[#183021] hover:bg-[#F5F3ED] rounded-full"
+          >
+            <RefreshCcw className={`w-4 h-4 mr-1 ${accruing ? "animate-spin" : ""}`} />
+            {accruing ? "Updating…" : "Sync credits"}
+          </Button>
+          <Link
+            to="/marketplace"
+            data-testid="dashboard-cta-marketplace"
+            className="text-sm font-medium text-[#183021] underline-offset-4 hover:underline"
+          >
+            Buy more capacity →
+          </Link>
+        </div>
       </header>
 
       <section className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -67,7 +104,7 @@ export default function Dashboard() {
               <c.icon className="w-4 h-4 text-[#C25942]" />
             </div>
             <div className="font-serif-display text-5xl text-[#183021] mt-3 tracking-tight">
-              <AnimatedNumber value={c.value} suffix={c.suffix} decimals={c.decimals ?? 0} testId={`dashboard-${c.id}-value`} />
+              <AnimatedNumber value={c.value} prefix={c.prefix ?? ""} suffix={c.suffix ?? ""} decimals={c.decimals ?? 0} testId={`dashboard-${c.id}-value`} />
             </div>
           </motion.div>
         ))}

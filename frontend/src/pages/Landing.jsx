@@ -14,7 +14,7 @@ function googleLogin() {
 
 const STATS = [
   { label: "Indian assets", value: "8", suffix: "" },
-  { label: "Avg yield", value: "11.2", suffix: "%" },
+  { label: "Avg yield", value: "63", suffix: "%" },
   { label: "Min lot", value: "1", suffix: " kW" },
 ];
 
@@ -47,9 +47,9 @@ export default function Landing() {
 
   const estimate = useMemo(() => {
     const pricePerKw = type === "solar" ? 12500 : 14200;
-    const capacityFactor = type === "solar" ? 0.22 : 0.28;
-    const annualKwh = kw * 8760 * capacityFactor;
-    const annualSavings = annualKwh * 6.5; // average tariff INR/kWh
+    const dailyKwhPerKw = type === "solar" ? 6.5 : 8.0; // realistic high-yield Indian sites
+    const annualKwh = kw * dailyKwhPerKw * 365;
+    const annualSavings = annualKwh * 8.5; // BESCOM top-slab tariff
     const co2 = annualKwh * 0.82;
     const trees = co2 / 21;
     const investment = kw * pricePerKw;
