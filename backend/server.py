@@ -410,7 +410,8 @@ async def accrue_credits(user: User = Depends(get_current_user)):
             purchased_at = datetime.fromisoformat(purchased_at)
         start_date = purchased_at.date()
         daily_base = yield_per_kw_day(farm["farm_type"]) * s["capacity_kw"]
-        rng = random.Random(hash(s["share_id"]))
+        seed = int(hashlib.sha256(s["share_id"].encode()).hexdigest()[:8], 16)
+        rng = random.Random(seed)
 
         d = start_date
         while d <= today:
@@ -476,7 +477,8 @@ async def user_telemetry(user: User = Depends(get_current_user), days: int = 30)
         if isinstance(purchased_at, str):
             purchased_at = datetime.fromisoformat(purchased_at)
         start_date = max(purchased_at.date(), window_start)
-        rng = random.Random(hash(share["share_id"]))  # deterministic per-share variation
+        seed = int(hashlib.sha256(share["share_id"].encode()).hexdigest()[:8], 16)
+        rng = random.Random(seed)  # deterministic per-share variation across restarts
         d = start_date
         while d <= today:
             variability = 0.85 + 0.3 * rng.random()
